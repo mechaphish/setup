@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: network-dude
+spec:
+  replicas: 1
+  selector:
+    app: network-dude
+  template:
+    metadata:
+      name: network-dude
+      labels:
+        app: network-dude
+    spec:
+      containers:
+      - name: network-dude
+        image: appropriate/nc
+        imagePullPolicy: IfNotPresent
+        command:
+          - "nc"
+          - "-kluvw"
+          - "1"
+          - "1999"
+        ports:
+        - containerPort: 1999
+          protocol: "UDP"
+
+        env:
+        - name: POSTGRES_DATABASE_NAME
+          value: "farnsworth"
+        - name: POSTGRES_DATABASE_PASSWORD
+          value: ""
+        - name: POSTGRES_DATABASE_USER
+          value: "postgres"
+        - name: ROUND_IDLE_TIME
+          value: "20"
+        - name: IDS_SERVICE_PORT
+          value: "1999"

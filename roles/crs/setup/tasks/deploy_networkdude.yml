@@ -1,0 +1,24 @@
+---
+- name: Create network-dude manifests folder
+  file:
+    path="{{ crs_manifests_path }}/network-dude"
+    state=directory
+
+- name: Copy network-dude manifests
+  template: src="{{ item.file }}" dest="{{ crs_manifests_path }}/{{ item.file }}"
+  with_items:
+    - {name: network-dude, file: network-dude/replication.yml, type: "rc"}
+    - {name: network-dude, file: network-dude/service.yml, type: "svc"}
+  register: manifests
+
+- name: Deploy network-dude
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "latest"
+  with_items:
+    - {name: network-dude, file: network-dude/replication.yml, type: "rc"}
+    - {name: network-dude, file: network-dude/service.yml, type: "svc"}
+  when: inventory_hostname == groups['kube-master'][0]

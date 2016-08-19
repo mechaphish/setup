@@ -1,0 +1,36 @@
+- name: 'Copy cgc-poller script'
+  copy: src="cgc-poller" dest="/usr/local/bin/cgc-poller" mode="0755"
+  notify:
+    - restart cgc-poller
+
+- name: 'Copy cgc-poller systemd conf file'
+  template: src="cgc-poller.systemd.service.j2" dest="/etc/systemd/system/cgc-poller.service"
+  notify:
+    - reload systemd
+    - enable cgc-poller
+    - restart cgc-poller
+
+- name: 'Install postfix'
+  apt: name="postfix" state="present"
+
+- name: 'Configure email notifications sending'
+  template: src="postfix-main.cf.j2" dest="/etc/postfix/main.cf"
+  notify:
+    - restart postfix
+
+- meta: flush_handlers
+
+- name: 'Install rsync'
+  apt: name="rsync" state="present"
+
+- name: 'Copy cgc_deployment ssh key'
+  copy: src="id_cgc_deployment" dest="{{ addusers.crs.home }}/.ssh/id_cgc_deployment" mode="0600"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Set cronjob to synchronize crsdata with cgc-api-docs'
+  cron:
+    name="rsync crsdata"
+    minute="0"
+    user="{{ addusers.crs.name }}"
+    job="rsync -avz -e 'ssh -p 48028 -i {{ addusers.crs.home }}/.ssh/id_cgc_deployment' {{ addusers.crs.home }}/crsdata/ cgc-docs@128.111.48.6:/var/www/docs/crsdata/sparring-partner/"

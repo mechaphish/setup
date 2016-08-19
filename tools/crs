@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+set -o nounset
+set -o errexit
+set -o pipefail
+
+SCRIPT_DIR=$(dirname "${BASH_SOURCE[0]}")
+MANIFESTS_DIR="/etc/kubernetes/crs"
+
+REGISTRY_NODE=${REGISTRY_NODE-172.16.7.72}
+NODE_SET=${NODE_SET-crs1}
+
+# Reset DB and start CRS
+# Options: "-withalerts". Examples:
+# * start crs
+#     crs start
+# * start crs with email alerts
+#     crs start -withalerts
+function start {
+    options="$1"
+    # cd $HOME/farnsworth && ./setupdb.sh && cd ..
+    kubectl create -f "$MANIFESTS_DIR/ambassador/daemonset${options}.yml" || true
+    kubectl create -f "$MANIFESTS_DIR/meister/replication.yml" || true
+    kubectl create -f "$MANIFESTS_DIR/network-dude/replication.yml" || true
+    kubectl create -f "$MANIFESTS_DIR/scriba/replication.yml" || true
+}
+
+# Stop CRS (it deletes all workers, make a dump first!)
+function stop {
+    kubectl delete rc scriba --grace-period=0 || true
+    kubectl delete rc meister --grace-period=0 || true
+    kubectl delete rc network-dude --grace-period=0 || true
+    kubectl delete ds ambassador --grace-period=0 || true
+    kubectl delete pods -l app=worker --cascade=false --grace-period=0 || true
+}
+
+# Dump db and Kubernetes logs to ~/crsdata
+function dump {
+    base_dir="$HOME/crsdata/`date '+%Y%m%d-%H.%M.%S'`"
+    mkdir -p "$base_dir/logs"
+    kubectl get pods --show-all -owide > "$base_dir/pods"
+    for w in $(cat "$base_dir/pods" | grep -v NAME | grep -v postgres | cut -f 1 -d " "); do
+        kubectl logs $w > "$base_dir/logs/$w.log" || true
+    done
+    tar -C "$base_dir" -cvjf "$base_dir/logs.tar.bz2" "logs/"
+    pg_dump -Upostgres -h postgres-master.default.svc.cluster.local -Fc farnsworth > "$base_dir/db.dump"
+}
+
+# Pull latest image version and update farnsworth git
+function update {
+    set +e
+    max_jobs=15
+    tag="$1"
+    hosts_file="${SCRIPT_DIR}/../sshp/ips-$NODE_SET.txt"
+    images=(
+        "$REGISTRY_NODE/meister:$tag"
+        "$REGISTRY_NODE/scriba:$tag"
+        "$REGISTRY_NODE/ambassador:$tag"
+        "$REGISTRY_NODE/worker:$tag"
+        "$REGISTRY_NODE/network-dude:$tag"
+    )
+    while : ; do
+        sum=0
+        for image in "${images[@]}"; do
+            sshp -m $max_jobs -f "$hosts_file" "sudo docker pull $image"
+            sum=$(($sum + $?))
+        done
+        if [ $sum -eq 0 ]; then
+            echo "DONE"
+            break
+        fi
+        sleep 1
+        echo "Retrying..."
+    done
+    pushd ~/farnsworth && git pull && popd
+    set -e
+    for image in "${images[@]}"; do
+        echo "$image updated"
+    done
+    echo "farnsworth updated"
+    set -e
+}
+
+# Switch to real CGC TI API/virtual-competition
+function api {
+    what="$1"
+    if [ $what = "show" ]; then
+        kubectl get endpoints | grep cgc-api
+    elif [ $what = "cgc" ]; then
+        kubectl delete ep cgc-api
+        kubectl create -f "$MANIFESTS_DIR/cgc-api/endpoint.yml" --validate=false
+    elif [ $what = "virtual" ]; then
+        kubectl delete ep cgc-api
+        kubectl create -f "$MANIFESTS_DIR/cgc-api/endpoint-$NODE_SET.yml" --validate=false
+    else
+        echo "Subcommand not valid. Use [show|cgc|virtual]"
+    fi
+}
+
+case "${1-help}" in
+    start)
+        start "${2:-}"
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    dump)
+        dump
+        ;;
+    update)
+        update "${2-latest}"
+        ;;
+    upgrade)
+        stop
+        update
+        start
+        ;;
+    api)
+        api "${2-show}"
+        ;;
+    *)
+        echo "Usage: ${BASH_SOURCE[0]} {start|stop|restart|dump|update|api}"
+        ;;
+esac

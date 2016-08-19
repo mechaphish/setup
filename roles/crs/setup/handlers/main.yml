@@ -1,0 +1,11 @@
+- name: 'reload sysctl'
+  service: name="procps" state="restarted"
+
+- name: 'reload systemd'
+  command: systemctl daemon-reload
+
+- name: 'enable cpufreq'
+  command: systemctl enable cpufreq
+
+- name: 'start cpufreq'
+  service: name="cpufreq" state="started"

@@ -1,0 +1,45 @@
+{% if ansible_service_mgr in ["sysvinit","upstart"] %}
+# Logging directory
+KUBE_LOGGING="--log-dir={{ kube_log_dir }} --logtostderr=true"
+{% else %}
+# logging to stderr means we get it in the systemd journal
+KUBE_LOGGING="--logtostderr=true"
+{% endif %}
+KUBE_LOG_LEVEL="--v={{ kube_log_level | default('2') }}"
+KUBE_ALLOW_PRIV="--allow_privileged=true"
+{% if inventory_hostname in groups['kube-node'] %}
+KUBELET_API_SERVER="--api_servers=https://{{ kube_apiserver_vip }}:{{ kube_apiserver_port }}"
+{% endif %}
+# The address for the info server to serve on (set to 0.0.0.0 or "" for all interfaces)
+KUBELET_ADDRESS="--address=0.0.0.0"
+# The port for the info server to serve on
+# KUBELET_PORT="--port=10250"
+# You may leave this blank to use the actual hostname
+KUBELET_HOSTNAME="--hostname_override={{ inventory_hostname }}"
+{% if inventory_hostname in groups['kube-master'] and inventory_hostname not in groups['kube-node'] %}
+KUBELET_REGISTER_NODE="--register-node=false"
+{% endif %}
+# location of the api-server
+{% if dns_setup %}
+KUBELET_ARGS="--cluster_dns={{ dns_server }} --cluster_domain={{ dns_domain }} --kubeconfig={{ kube_config_dir}}/node-kubeconfig.yaml --config={{ kube_manifest_dir }}"
+{% else %}
+KUBELET_ARGS="--kubeconfig={{ kube_config_dir}}/kubelet.kubeconfig --config={{ kube_manifest_dir }}"
+{% endif %}
+{% if kube_network_plugin is defined and kube_network_plugin in ["calico", "weave"] %}
+KUBELET_NETWORK_PLUGIN="--network_plugin=cni --network-plugin-dir=/etc/cni/net.d"
+{% elif kube_network_plugin is defined and kube_network_plugin == "weave" %}
+DOCKER_SOCKET="--docker-endpoint=unix:/var/run/weave/weave.sock"
+{% endif %}
+# Should this cluster be allowed to run privileged docker containers
+KUBE_ALLOW_PRIV="--allow_privileged=true"
+{% if cloud_provider is defined and cloud_provider == "openstack" %}
+KUBELET_CLOUDPROVIDER="--cloud-provider={{ cloud_provider }} --cloud-config={{ kube_config_dir }}/cloud_config"
+{% else %}
+{# TODO: gce and aws don't need the cloud provider to be set? #}
+KUBELET_CLOUDPROVIDER=""
+{% endif %}
+{% if ansible_service_mgr in ["sysvinit","upstart"] %}
+DAEMON_ARGS="$KUBE_LOGGING $KUBE_LOG_LEVEL $KUBE_ALLOW_PRIV $KUBELET_API_SERVER $KUBELET_ADDRESS \
+$KUBELET_HOSTNAME $KUBELET_REGISTER_NODE $KUBELET_ARGS $DOCKER_SOCKET $KUBELET_ARGS $KUBELET_NETWORK_PLUGIN \
+$KUBELET_CLOUDPROVIDER"
+{% endif %}

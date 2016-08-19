@@ -1,0 +1,13 @@
+[Unit]
+Description=docker-registry
+After=docker.service
+
+[Service]
+WorkingDirectory={{ registry_path }}
+ExecStart=/usr/local/bin/docker-compose up
+Restart=always
+RestartSec=10s
+LimitNOFILE=40000
+
+[Install]
+WantedBy=multi-user.target

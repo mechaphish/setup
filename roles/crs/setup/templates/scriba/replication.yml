@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: scriba
+spec:
+  replicas: 1
+  selector:
+    app: scriba
+  template:
+    metadata:
+      name: scriba
+      labels:
+        app: scriba
+    spec:
+      containers:
+      - name: scriba
+        image: {{ crs.registry_node }}/{{ crs.scriba.image }}
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: {{ crs.scriba.resources.requests.cpu }}
+            memory: {{ crs.scriba.resources.requests.memory }}
+        env:
+        - name: SCRIBA_LOG_LEVEL
+          value: {{ crs.scriba.log_level }}
+        - name: POSTGRES_DATABASE_NAME
+          value: "farnsworth"
+        - name: POSTGRES_DATABASE_PASSWORD
+          value: ""
+        - name: POSTGRES_DATABASE_USER
+          value: "postgres"
+        - name: POSTGRES_MASTER_CONNECTIONS
+          value: "20"

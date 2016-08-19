@@ -1,0 +1,133 @@
+---
+- name: Create Postgres manifests folder
+  file:
+    path="{{ crs_manifests_path }}/postgres"
+    state=directory
+
+- name: Copy Postgres manifests
+  template: src="{{ item.file }}" dest="{{ crs_manifests_path }}/{{ item.file }}"
+  with_items:
+    - {name: stolon, file: postgres/stolon-secret.yaml, type: "secret"}
+    - {name: postgres-master, file: postgres/stolon-proxy-service.yaml, type: "svc"}
+    - {name: stolon-sentinel, file: postgres/stolon-sentinel.yaml, type: "rc"}
+    - {name: stolon-proxy, file: postgres/stolon-proxy.yaml, type: "rc"}
+    - {name: stolon-keeper, file: postgres/stolon-keeper.yaml, type: "ds"}
+  register: manifests
+
+- name: Label first Postgres node. We want a single instance running otherwise sentinel cannot elect a master
+  shell: "kubectl label nodes {{ groups['postgres'][0] }} node=postgres --overwrite"
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: FIXME - remove Stolon pods
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "absent"
+  with_items:
+    - {name: stolon, file: postgres/stolon-secret.yaml, type: "secret"}
+    - {name: stolon-sentinel, file: postgres/stolon-sentinel.yaml, type: "rc"}
+    - {name: stolon-proxy, file: postgres/stolon-proxy.yaml, type: "rc"}
+    - {name: stolon-keeper, file: postgres/stolon-keeper.yaml, type: "ds"}
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Wait for Stolon pods to shutdown
+  pause: seconds=20
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: FIXME - clean etcd /stolon settings
+  shell: "etcdctl rm --recursive /stolon"
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Deploy Postgres
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "latest"
+  with_items:
+    - {name: stolon, file: postgres/stolon-secret.yaml, type: "secret"}
+    - {name: postgres-master, file: postgres/stolon-proxy-service.yaml, type: "svc"}
+    - {name: stolon-sentinel, file: postgres/stolon-sentinel.yaml, type: "rc"}
+    - {name: stolon-proxy, file: postgres/stolon-proxy.yaml, type: "rc"}
+    - {name: stolon-keeper, file: postgres/stolon-keeper.yaml, type: "ds"}
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: 'Install python pip'
+  apt: name="{{ item }}" state=latest
+  with_items:
+    - libpq-dev
+    - python-pip
+    - python-virtualenv
+
+
+# Setting up the database
+
+- name: 'Clone Farnsworth repository'
+  git:
+    repo="git@git.seclab.cs.ucsb.edu:cgc/farnsworth.git"
+    dest="{{ addusers.crs.home }}/farnsworth"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Install peewee fork'
+  pip:
+    name: "git+ssh://git@git.seclab.cs.ucsb.edu/cgc/peewee.git#egg=peewee"
+    virtualenv: "{{ addusers.crs.home }}/farnsworth-venv/"
+    virtualenv_python: python2.7
+    extra_args: "-e"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Install farnsworth'
+  pip:
+    name: "{{ addusers.crs.home }}/farnsworth"
+    virtualenv: "{{ addusers.crs.home }}/farnsworth-venv/"
+    virtualenv_python: python2.7
+    extra_args: "-e"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Copy Farnsworth .env'
+  shell: >
+    cp .env.example .env
+    chdir="{{ addusers.crs.home }}/farnsworth"
+    creates="{{ addusers.crs.home }}/farnsworth/.env"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Set postgres-master host in .env'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/farnsworth/.env"
+    regexp="^POSTGRES_MASTER_SERVICE_HOST"
+    line='POSTGRES_MASTER_SERVICE_HOST="postgres-master.default.svc.cluster.local"'
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: Wait for Postgres to start
+  pause: seconds=20
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: 'Load db schema'
+  shell: source ~/farnsworth-venv/bin/activate && ./setupdb.sh
+  args:
+    chdir: "{{ addusers.crs.home }}/farnsworth"
+    executable: /bin/bash
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Label the rest of Postgres nodes
+  shell: "kubectl label nodes {{ item }} node=postgres --overwrite"
+  with_items: "{{ groups['postgres'] }}"
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]

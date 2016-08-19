@@ -1,0 +1,21 @@
+- name: 'Clone virtual-competition repository'
+  git:
+    repo="git@git.seclab.cs.ucsb.edu:cgc/virtual-competition.git"
+    dest="{{ addusers.crs.home }}/{{ item.path }}"
+    accept_hostkey=yes
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+  with_items: "{{ crs.virtualcompetition.instances }}"
+
+- name: 'Configure port forwarding'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/{{ item.path }}/Vagrantfile"
+    regexp="forwarded_port"
+    line='node.vm.network "forwarded_port", guest:8888, host:{{ item.port }}'
+  with_items: "{{ crs.virtualcompetition.instances }}"
+
+- name: 'Bootstrap boxes'
+  shell: vagrant up chdir="{{ addusers.crs.home }}/{{ item.path }}"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+  with_items: "{{ crs.virtualcompetition.instances }}"

@@ -1,0 +1,41 @@
+totem {
+    version: 2
+    secauth: off
+    cluster_name: {{ cluster_group }}
+    transport: udpu
+    rrp_mode: passive
+    interface {
+        ringnumber: 0
+        broadcast: no
+        bindnetaddr: {{ hostvars[inventory_hostname]['ansible_eth0']['ipv4']['address'] }}
+    }
+}
+
+nodelist {
+{% for node in groups[cluster_group] %}
+    node {
+        name: {{ node }}
+        ring0_addr: {{ hostvars[node]['ansible_eth0']['ipv4']['address'] }}
+        nodeid: {{ loop.index }}
+    }
+{% endfor %}
+}
+
+quorum {
+    provider: corosync_votequorum
+    expected_votes: {{ (groups[cluster_group]|length / 2)|int }}
+}
+
+service {
+    name: pacemaker
+    ver: 0
+}
+
+amf {
+    mode: disabled
+}
+
+logging {
+    to_syslog: yes
+    debug: on
+}

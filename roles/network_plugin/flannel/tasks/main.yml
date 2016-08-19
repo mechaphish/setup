@@ -1,0 +1,60 @@
+---
+- name: Flannel | Write flannel configuration
+  template:
+    src: network.json
+    dest: /etc/flannel-network.json
+    backup: yes
+
+- name: Flannel | Create flannel pod manifest
+  template:
+    src: flannel-pod.yml
+    dest: /etc/kubernetes/manifests/flannel-pod.manifest
+  notify: delete default docker bridge
+
+- name: Flannel | Wait for flannel subnet.env file presence
+  wait_for:
+    path: /run/flannel/subnet.env
+    delay: 5
+    timeout: 600
+
+- name: Flannel | Get flannel_subnet from subnet.env
+  shell: cat /run/flannel/subnet.env | awk -F'=' '$1 == "FLANNEL_SUBNET" {print $2}'
+  register: flannel_subnet_output
+  changed_when: false
+
+- set_fact:
+    flannel_subnet: "{{ flannel_subnet_output.stdout }}"
+
+- name: Flannel | Get flannel_mtu from subnet.env
+  shell: cat /run/flannel/subnet.env | awk -F'=' '$1 == "FLANNEL_MTU" {print $2}'
+  register: flannel_mtu_output
+  changed_when: false
+
+- set_fact:
+    flannel_mtu: "{{ flannel_mtu_output.stdout }}"
+
+- name: Flannel | Set docker daemon options
+  template:
+    src: docker
+    dest: "/etc/default/docker"
+    owner: root
+    group: root
+    mode: 0644
+  notify:
+    - restart docker
+
+- name: Flannel | Create docker config symlink for CoreOS
+  file:
+    src: "/etc/default/docker"
+    dest: "/run/flannel_docker_opts.env"
+    state: link
+  when: ansible_os_family == "CoreOS"
+
+- name: Flannel | Write docker.service systemd file
+  template:
+    src: systemd-docker.service
+    dest: /etc/systemd/system/docker.service
+  notify: restart docker
+  when: ansible_service_mgr == "systemd" and ansible_os_family != "CoreOS"
+
+- meta: flush_handlers

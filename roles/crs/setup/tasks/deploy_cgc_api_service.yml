@@ -1,0 +1,29 @@
+---
+- name: Create API manifests folder
+  file: path="{{ item }}" state=directory
+  with_items:
+    - "{{ crs_manifests_path }}/cgc-api"
+
+- name: Copy virtualcompetition API endpoint manifests
+  template:
+    src="vc-api/endpoint.yml"
+    dest="{{ crs_manifests_path }}/cgc-api/endpoint-{{ item.name }}.yml"
+  with_items: crs.virtualcompetition.instances
+
+- name: Copy CGC API manifests
+  template: src="{{ item.file }}" dest="{{ crs_manifests_path }}/{{ item.file }}"
+  with_items:
+    - {name: cgc-api, file: cgc-api/service.yml, type: "svc"}
+    - {name: cgc-api, file: cgc-api/endpoint.yml, type: "endpoint"}
+
+- name: Enable CGC API service
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "latest"
+  with_items:
+    - {name: cgc-api, file: cgc-api/service.yml, type: "svc"}
+    - {name: cgc-api, file: cgc-api/endpoint.yml, type: "endpoint"}
+  when: inventory_hostname == groups['kube-master'][0]

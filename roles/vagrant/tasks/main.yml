@@ -1,0 +1,30 @@
+- name: 'Add VirtualBox repository key'
+  apt_key: url="{{ item }}"
+  with_items:
+    - "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
+    - "https://www.virtualbox.org/download/oracle_vbox.asc"
+
+- name: 'Add VirtualBox repository and update cache'
+  apt_repository:
+    repo="deb http://download.virtualbox.org/virtualbox/debian {{ ansible_distribution_release }} contrib"
+    filename="virtualbox"
+    update_cache="yes"
+
+- name: 'Install VirtualBox dependencies'
+  apt: name={{ item }} state="latest" update_cache="yes" cache_valid_time="600"
+  with_items:
+    - "linux-image-extra-{{ ansible_kernel }}"
+    - virtualbox-dkms
+
+- name: 'Install VirtualBox'
+  apt: name={{ item }} state="latest" update_cache="yes" cache_valid_time="600"
+  with_items:
+    - virtualbox-{{ virtualbox_version }}
+
+- name: 'Download Vagrant'
+  get_url:
+    url="https://releases.hashicorp.com/vagrant/{{ vagrant_version }}/vagrant_{{ vagrant_version }}_x86_64.deb"
+    dest="/tmp/vagrant_{{ vagrant_version }}_x86_64.deb"
+
+- name: 'Install Vagrant'
+  apt: deb="/tmp/vagrant_{{ vagrant_version }}_x86_64.deb"

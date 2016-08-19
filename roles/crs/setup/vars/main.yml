@@ -1,0 +1,3 @@
+---
+crs_manifests_path: "/etc/kubernetes/crs"
+kube_token_file_path: "/etc/kubernetes/tokens/known_tokens.csv"

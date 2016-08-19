@@ -1,0 +1,19 @@
+---
+# Common setup
+# ------------
+
+- name: 'Install base packages'
+  apt: name={{ item }} state="latest"
+  with_items:
+    - language-pack-en-base     # solve "warning: setlocale: LC_CTYPE: cannot change locale (en_US.UTF-8)"
+    - apt-transport-https       # required by some apt packages
+
+- name: 'Install git, curl and htop'
+  apt: name={{ item }} state="latest" update_cache="yes" cache_valid_time="600"
+  with_items:
+    - git
+    - curl
+    - htop
+
+- name: 'Install postgres client scripts'
+  include: postgres-client.yml

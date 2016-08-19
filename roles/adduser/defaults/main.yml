@@ -1,0 +1,44 @@
+---
+addusers:
+  etcd:
+    name: etcd
+    comment: "Etcd user"
+    createhome: yes
+    home: "/var/lib/etcd"
+    system: yes
+    shell: /bin/nologin
+  kube:
+    name: kube
+    comment: "Kubernetes user"
+    shell: /sbin/nologin
+    system: yes
+    group: "{{ kube_cert_group }}"
+    createhome: no
+  crs:
+    name: crs
+    comment: "Login user"
+    shell: /bin/bash
+    system: no
+    createhome: yes
+    home: "/home/crs"
+    authorized_keys:
+      - "https://git.seclab.cs.ucsb.edu/disperati.keys"
+      - "https://git.seclab.cs.ucsb.edu/mpizza.keys"
+      - "https://git.seclab.cs.ucsb.edu/machiry.keys"
+      - "https://git.seclab.cs.ucsb.edu/jacopo.keys"
+      - "https://git.seclab.cs.ucsb.edu/cao.keys"
+      - "https://git.seclab.cs.ucsb.edu/andrew.keys"
+      - "https://git.seclab.cs.ucsb.edu/salls.keys"
+      - "https://git.seclab.cs.ucsb.edu/antoniob.keys"
+      - "https://git.seclab.cs.ucsb.edu/fish.keys"
+      - "https://git.seclab.cs.ucsb.edu/yans.keys"
+
+adduser:
+  name: "{{ user.name }}"
+  group: "{{ user.name|default(None) }}"
+  comment: "{{ user.comment|default(None) }}"
+  shell: "{{ user.shell|default(None) }}"
+  system: "{{ user.system|default(None) }}"
+  createhome: "{{ user.createhome|default(None) }}"
+  home: "{{ user.home|default(None) }}"
+  authorized_keys: "{{ user.authorized_keys|default([]) }}"

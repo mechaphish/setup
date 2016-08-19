@@ -1,0 +1,29 @@
+---
+
+- name: 'reload systemd'
+  command: systemctl daemon-reload
+
+- name: 'disable corosync'
+  command: systemctl disable corosync
+
+- name: 'stop corosync'
+  service: name="corosync" state="stopped"
+
+- name: 'enable corosync'
+  command: systemctl enable corosync
+
+- name: 'restart corosync'
+  service: name="corosync" state="restarted"
+
+- name: 'enable pacemaker'
+  command: systemctl enable pacemaker
+  ignore_errors: yes
+
+- name: 'restart pacemaker'
+  service: name="pacemaker" state="restarted"
+
+- name: 'enable pcsd'
+  command: systemctl enable pcsd
+
+- name: 'restart pcsd'
+  service: name="pcsd" state="restarted"

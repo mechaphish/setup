@@ -1,0 +1,20 @@
+#Listen on localhost
+bind-interfaces
+listen-address=0.0.0.0
+
+addn-hosts=/etc/hosts
+
+bogus-priv
+
+#Set upstream dns servers
+{% if upstream_dns_servers is defined %}
+{% for srv in upstream_dns_servers %}
+server={{ srv }}
+{% endfor %}
+{% else %}
+ server=8.8.8.8
+ server=8.8.4.4
+{% endif %}
+
+# Forward k8s domain to kube-dns
+server=/{{ dns_domain }}/{{ skydns_server }}

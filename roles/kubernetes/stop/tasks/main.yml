@@ -1,0 +1,28 @@
+- name: 'Stop Docker service'
+  service:
+    name="docker"
+    state="stopped"
+
+- name: 'Force Docker volumes umount'
+  shell: "for i in $(df | grep kubelet | awk '{ print $6 }'); do umount $i; done"
+
+- name: 'Stop kubernetes services'
+  service:
+    name="{{ item }}"
+    state="stopped"
+  with_items:
+    - cgc-poller
+    - kubelet
+    - kube-apiserver
+    - etcd
+  ignore_errors: yes
+
+- name: 'Force stop flannel'
+  shell: "killall flannel_helper"
+  ignore_errors: yes
+  changed_when: False
+
+- name: 'Start Docker service'
+  service:
+    name="docker"
+    state="started"

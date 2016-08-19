@@ -1,0 +1,33 @@
+---
+deleteusers:
+  etcd:
+    name: etcd
+    comment: "Etcd user"
+    createhome: yes
+    home: "/var/lib/etcd"
+    system: yes
+    shell: /bin/nologin
+  kube:
+    name: kube
+    comment: "Kubernetes user"
+    shell: /sbin/nologin
+    system: yes
+    group: "{{ kube_cert_group }}"
+    createhome: no
+  crs:
+    name: crs
+    comment: "Login user"
+    shell: /bin/bash
+    system: no
+    createhome: yes
+    home: "/home/crs"
+
+deleteuser:
+  name: "{{ user.name }}"
+  group: "{{ user.name|default(None) }}"
+  comment: "{{ user.comment|default(None) }}"
+  shell: "{{ user.shell|default(None) }}"
+  system: "{{ user.system|default(None) }}"
+  createhome: "{{ user.createhome|default(None) }}"
+  home: "{{ user.home|default(None) }}"
+  authorized_keys: "{{ user.authorized_keys|default([]) }}"

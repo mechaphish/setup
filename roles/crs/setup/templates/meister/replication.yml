@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: meister
+spec:
+  replicas: 1
+  selector:
+    app: meister
+  template:
+    metadata:
+      name: meister
+      labels:
+        app: meister
+    spec:
+      containers:
+      - name: meister
+        image: {{ crs.registry_node }}/{{ crs.meister.image }}
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: {{ crs.meister.resources.requests.cpu }}
+            memory: {{ crs.meister.resources.requests.memory }}
+        env:
+        - name: MEISTER_LOG_LEVEL
+          value: "{{ crs.meister.log_level }}"
+        - name: MEISTER_OVERPROVISIONING
+          value: "{{ crs.meister.overprovisioning }}"
+        - name: MEISTER_PRIORITY_STAGGERING
+          value: "{{ crs.meister.priority.staggering }}"
+        - name: MEISTER_PRIORITY_STAGGER_FACTOR
+          value: "{{ crs.meister.priority.stagger_factor }}"
+        - name: WORKER_IMAGE
+          value: "{{ crs.registry_node }}/{{ crs.worker.image }}"
+        - name: WORKER_IMAGE_PULL_POLICY
+          value: "IfNotPresent"
+        - name: KUBERNETES_SERVICE_USER
+          value: "{{ kubernetes_service_credentials.stdout.split(',')[1] }}"
+        - name: KUBERNETES_SERVICE_TOKEN
+          value: "{{ kubernetes_service_credentials.stdout.split(',')[0] }}"
+        - name: KUBERNETES_SERVICE_USE_SSL
+          value: "True"
+        - name: POSTGRES_DATABASE_NAME
+          value: "farnsworth"
+        - name: POSTGRES_DATABASE_PASSWORD
+          value: ""
+        - name: POSTGRES_DATABASE_USER
+          value: "postgres"
+        - name: POSTGRES_MASTER_CONNECTIONS
+          value: "20"

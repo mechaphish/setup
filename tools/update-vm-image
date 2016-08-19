@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+# one qemu at once plz
+while [ "$(ps aux | grep -c qemu-system-x86_64)" -ge 2  ]; do
+    echo "VM image process already running, trying to kill it..."
+    killall qemu-system-x86_64
+    sleep 3
+done
+
+work_dir="$HOME/docker-cache/${CI_BUILD_REF}"
+input="$HOME/docker-cache/deploy_key_clean_remake.qcow2"
+
+tmp_output="$work_dir/cgc-vm.qcow2"
+output="$HOME/docker-cache/cgc-vm.qcow2"
+
+rm -rf "$work_dir"
+mkdir -p "$work_dir"
+pushd "$work_dir"
+
+git clone git@git.seclab.cs.ucsb.edu:cgc/setup.git
+cd ./setup/kubernetes/tester-qemu-docker/
+cp "$input" "$tmp_output"
+python ./vm_setup.py "$tmp_output"
+mv "$tmp_output" "$output"
+
+popd
+rm -rf "$work_dir"
+echo DONE

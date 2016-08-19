@@ -1,0 +1,19 @@
+[Unit]
+Description=Calico per-node agent
+Documentation=https://github.com/projectcalico/calico-docker
+Requires=docker.service
+After=docker.service etcd.service
+
+[Service]
+User=root
+PermissionsStartOnly=true
+{% if inventory_hostname in groups['kube-node'] and peer_with_router|default(false)%}
+ExecStart={{ bin_dir }}/calicoctl node --ip={{ip | default(ansible_default_ipv4.address) }} --as={{ local_as }} --detach=false
+{%     else %}
+ExecStart={{ bin_dir }}/calicoctl node --ip={{ip | default(ansible_default_ipv4.address) }} --detach=false
+{%     endif %}
+Restart=always
+Restart=10
+
+[Install]
+WantedBy=multi-user.target

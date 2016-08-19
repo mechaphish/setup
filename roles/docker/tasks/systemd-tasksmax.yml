@@ -1,0 +1,9 @@
+---
+- name: create docker service directory for systemd
+  file: path=/etc/systemd/system/docker.service.d state=directory
+
+- name: drop docker environment conf to unlimit max number of forks
+  copy:
+    src: tasksmax.conf
+    dest: /etc/systemd/system/docker.service.d/tasksmax.conf
+  notify: restart docker

@@ -1,0 +1,113 @@
+---
+- include: gitinfos.yml
+  when: run_gitinfos
+
+- name: gather os specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - files:
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_version|lower|replace('/', '_') }}.yml"
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_release }}.yml"
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_major_version|lower|replace('/', '_') }}.yml"
+      - "{{ ansible_distribution|lower }}.yml"
+      - "{{ ansible_os_family|lower }}.yml"
+      - defaults.yml
+      paths:
+      - ../vars
+      skip: true
+
+- name: Force binaries directory for CoreOS
+  set_fact:
+    bin_dir: "/opt/bin"
+  when: ansible_os_family == "CoreOS"
+
+- name: Create kubernetes config directory
+  file:
+    path: "{{ kube_config_dir }}"
+    state: directory
+    owner: kube
+
+- name: Create kubernetes script directory
+  file:
+    path: "{{ kube_script_dir }}"
+    state: directory
+    owner: kube
+
+- name: Create kubernetes manifests directory
+  file:
+    path: "{{ kube_manifest_dir }}"
+    state: directory
+    owner: kube
+
+- name: Create kubernetes logs directory
+  file:
+    path: "{{ kube_log_dir }}"
+    state: directory
+    owner: kube
+  when: ansible_service_mgr in ["sysvinit","upstart"]
+
+- name: check cloud_provider value
+  fail:
+    msg: "If set the 'cloud_provider' var must be set either to 'generic', 'gce', 'aws' or 'openstack'"
+  when: cloud_provider is defined and cloud_provider not in ['generic', 'gce', 'aws', 'openstack']
+
+- include: openstack-credential-check.yml
+  when: cloud_provider is defined and cloud_provider == 'openstack'
+
+- name: Create cni directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: kube
+  with_items:
+    - "/etc/cni/net.d"
+    - "/opt/cni/bin"
+  when: kube_network_plugin in ["calico", "weave"]
+
+- name: Update package management cache (YUM)
+  yum: update_cache=yes name='*'
+  when: ansible_pkg_mgr == 'yum'
+
+- name: Install latest version of python-apt for Debian distribs
+  apt: name=python-apt state=latest update_cache=yes cache_valid_time=3600
+  when: ansible_os_family == "Debian"
+
+- name: Install python-dnf for latest RedHat versions
+  command: dnf install -y python-dnf yum
+  when: ansible_distribution == "Fedora" and
+        ansible_distribution_major_version > 21
+  changed_when: False
+
+- name: Install epel-release on RedHat/CentOS
+  shell: rpm -qa | grep epel-release || rpm -ivh https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+  when: ansible_distribution in ["CentOS","RedHat"] and
+        ansible_distribution_major_version >= 7
+  changed_when: False
+
+- name: Install packages requirements
+  action:
+    module: "{{ ansible_pkg_mgr }}"
+    name: "{{ item }}"
+    state: latest
+  with_items: "{{required_pkgs | default([]) | union(common_required_pkgs|default([]))}}"
+  when: ansible_os_family != "CoreOS"
+
+# Todo : selinux configuration
+- name: Set selinux policy to permissive
+  selinux: policy=targeted state=permissive
+  when: ansible_os_family == "RedHat"
+  changed_when: False
+
+- name: Write openstack cloud-config
+  template:
+    src: openstack-cloud-config.j2
+    dest: "{{ kube_config_dir }}/cloud_config"
+    group: "{{ kube_cert_group }}"
+    mode: 0640
+  when: cloud_provider is defined and cloud_provider == "openstack"
+
+- include: etchosts.yml
+
+- include: ssh.yml
+
+- include: swap.yml

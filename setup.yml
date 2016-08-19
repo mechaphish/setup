@@ -1,0 +1,53 @@
+---
+- hosts: all
+  any_errors_fatal: true
+  roles:
+    - { role: common/setup, tags: common }
+
+# Kubernetes
+- hosts: kube-cluster
+  any_errors_fatal: true
+  roles:
+    - { role: kubernetes/preinstall, tags: preinstall }
+    - { role: etcd, tags: etcd }
+    - { role: docker, tags: docker }
+    - { role: imageprovision, tags: imageprovision }
+    - { role: kubernetes/node, tags: node }
+
+- hosts: kube-master
+  any_errors_fatal: true
+  roles:
+    - { role: kubernetes/master, tags: master }
+    - { role: virtual-ip, tags: master-vip,
+        cluster_group: 'kube-master',
+        cluster_vip: '{{ kube_apiserver_vip }}',
+        cluster_vip_netmask: '{{ kube_apiserver_vip_netmask }}',
+        cluster_daemons: ['kube-apiserver'] }
+
+- hosts: kube-cluster
+  any_errors_fatal: true
+  roles:
+    - { role: network_plugin, tags: network }
+    - { role: dnsmasq, tags: dns }
+    - { role: skydns, tags: dns }
+    - { role: kubernetes/monitor, tags: monitor }
+    - { role: crs/setup, tags: crs }
+    - { role: crs/vm, tags: vm }
+
+# Virtual IPs
+- hosts: ambassador
+  any_errors_fatal: true
+  roles:
+    - { role: virtual-ip, tags: ambassador,
+        cluster_group: 'ambassador',
+        cluster_vip: '{{ ambassador_vip }}',
+        cluster_vip_netmask: 24 }
+    - { role: cgc-poller/setup, tags: cgc-poller }
+
+- hosts: ids
+  any_errors_fatal: true
+  roles:
+    - { role: virtual-ip, tags: ids,
+        cluster_group: 'ids',
+        cluster_vip: '{{ ids_vip }}',
+        cluster_vip_netmask: 24 }

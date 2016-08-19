@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -o nounset
+set -o errexit
+set -o pipefail
+
+VC_NODE=${VC_NODE-172.16.7.72}
+VC_PATH=${VC_PATH-virtual-competition-$NODE_SET/}
+
+function control {
+    echo "Connect to VM on $VC_NODE:$VC_PATH"
+    ssh $VC_NODE "cd $VC_PATH && bin/launch $1 $2"
+}
+
+control "${1-help}" "${2-}"

@@ -1,0 +1,14 @@
+- name: 'Copy pg_dump wrapper'
+  copy: src="postgres-client/pg_dump" dest="/usr/local/bin/pg_dump" mode="0777"
+
+- name: 'Copy psql wrapper'
+  copy: src="postgres-client/psql" dest="/usr/local/bin/psql" mode="0777"
+
+- name: 'Copy psqlt wrapper'
+  copy: src="postgres-client/psqlt" dest="/usr/local/bin/psqlt" mode="0777"
+
+- name: 'Copy createdb wrapper'
+  copy: src="postgres-client/createdb" dest="/usr/local/bin/createdb" mode="0777"
+
+- name: 'Copy dropdb wrapper'
+  copy: src="postgres-client/dropdb" dest="/usr/local/bin/dropdb" mode="0777"

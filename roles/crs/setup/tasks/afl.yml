@@ -1,0 +1,26 @@
+---
+# Kernel and CPU settings for AFL
+# -------------------------------
+
+- name: 'First disable apport, just to be sure it does not interfer'
+  lineinfile: line="enabled=0" dest="/etc/default/apport" create="yes"
+
+- name: 'Copy sysctl conf'
+  copy: src="sysctl-60-afl.conf" dest="/etc/sysctl.d/60-afl.conf" owner="root" group="root"
+  notify:
+    - reload sysctl
+
+- name: 'Disable CPU ondemand service'
+  command: systemctl disable ondemand
+  changed_when: False
+
+- name: 'Set CPU scaling_governor to performance'
+  copy:
+    src="cpufreq.service"
+    dest="/etc/systemd/system/cpufreq.service"
+  notify:
+    - reload systemd
+    - enable cpufreq
+    - start cpufreq
+
+- meta: flush_handlers

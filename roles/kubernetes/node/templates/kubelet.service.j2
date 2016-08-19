@@ -1,0 +1,30 @@
+[Unit]
+Description=Kubernetes Kubelet Server
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+{% if kube_network_plugin is defined and kube_network_plugin == "calico" %}
+After=docker.service calico-node.service
+{% else %}
+After=docker.service
+{% endif %}
+
+[Service]
+EnvironmentFile=/etc/kubernetes/kubelet.env
+ExecStart={{ bin_dir }}/kubelet \
+		$KUBE_LOGTOSTDERR \
+		$KUBE_LOG_LEVEL \
+		$KUBELET_API_SERVER \
+		$KUBELET_ADDRESS \
+		$KUBELET_PORT \
+		$KUBELET_HOSTNAME \
+		$KUBE_ALLOW_PRIV \
+		$KUBELET_ARGS \
+		$DOCKER_SOCKET \
+		$KUBELET_REGISTER_NODE \
+		$KUBELET_NETWORK_PLUGIN \
+		$KUBELET_CLOUDPROVIDER
+Restart=on-failure
+OOMScoreAdjust=-1000
+Nice=-20
+
+[Install]
+WantedBy=multi-user.target

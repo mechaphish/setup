@@ -1,0 +1,89 @@
+---
+- name: 'Uninstall apt packages'
+  apt: name={{ item }} purge="yes" state="absent"
+  with_items:
+    - docker-engine
+    - pcs
+    - fence-agents
+    - corosync
+
+- name: 'Uninstall pip packages'
+  pip: name="{{ item }}" state="absent"
+  with_items:
+    - farnsworth
+    - pcs
+  ignore_errors: True
+
+- name: 'Remove configurations'
+  file: path={{ item }} state="absent"
+  with_items:
+    # docker
+    - /var/lib/docker
+    - /etc/default/docker
+    - /etc/apt/sources.list.d/docker.list
+    - /usr/local/bin/pg_dump
+    - /usr/local/bin/psql
+    - /usr/local/bin/psqlt
+    - /usr/local/bin/dropdb
+    - /usr/local/bin/createdb
+    # pacemaker
+    - /usr/share/pcsd
+    - /var/lib/pacemaker
+    - /etc/corosync
+    # etcd
+    - /usr/local/bin/etcd
+    - /usr/local/bin/etcdctl
+    - /etc/etcd.env
+    - /etc/systemd/system/etcd.service
+    - /etc/systemd/system/multi-user.target.wants/etcd.service
+    # flannel
+    - /etc/flannel-network.json
+    # dnsmasq
+    - /etc/dnsmasq.d/
+    - /etc/dnsmasq.d-available/
+    # kubernetes
+    - /etc/systemd/system/kube-apiserver.service
+    - /etc/systemd/system/kubelet.service
+    - /etc/systemd/system/multi-user.target.wants/kube-apiserver.service
+    - /etc/systemd/system/multi-user.target.wants/kubelet.service
+    - /usr/local/bin/kubernetes-scripts/
+    - /usr/local/bin/kubectl
+    - /usr/local/bin/kubelet
+    - /usr/local/bin/kube-apiserver
+    - /etc/kubernetes/
+    - /var/lib/kubelet/
+    - /var/log/containers/
+    - /root/kube-token-auth-file
+    - /root/.kpm/
+    - /root/.kube/
+    - /data
+    # leftovers
+    - /etc/postfix/main.cf
+    - /usr/local/bin/cgc-poller
+    - /etc/systemd/system/cgc-poller.service
+    - /etc/systemd/system/cpufreq.service
+    - /etc/systemd/system/kvm-permission.service
+    - /usr/local/bin/coverage
+    - /usr/local/bin/coverage2
+    - /usr/local/bin/coverage-2.7
+    - /usr/local/bin/dotenv
+    - /usr/local/bin/farnsworth
+    - /usr/local/bin/nosetests
+    - /usr/local/bin/nosetests-2.7
+    - /usr/local/bin/pwiz.py
+    - /usr/local/bin/pwiz.pyc
+  notify: reload systemd
+
+- name: Restore resolv.conf configuration
+  copy: src="resolvconf/head" dest="/etc/resolvconf/resolv.conf.d/head"
+  notify: reload resolvconf
+
+- meta: flush_handlers
+
+- name: 'Remove virtual network devices'
+  shell: "ip link del {{ item }}"
+  ignore_errors: True
+  with_items:
+    - docker0
+    - flannel0
+    - flannel.1

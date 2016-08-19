@@ -1,0 +1,22 @@
+---
+# Deploy the VM Image
+# ------------
+
+- name: 'Create /data directory'
+  file: path=/data state=directory mode=0777
+
+- name: 'Copy VM image to kube-master'
+  synchronize: src=cgc-vm.qcow2 dest=/data/cgc-vm.qcow2
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: 'Distribute VM image'
+  synchronize:
+    src: /data/cgc-vm.qcow2
+    dest: /data/cgc-vm.qcow2
+    compress: no
+  delegate_to: "{{ groups['kube-master'][0] }}"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Set permissions for /dev/kvm'
+  file: path=/dev/kvm mode=0666

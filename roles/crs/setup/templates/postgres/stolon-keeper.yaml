@@ -1,0 +1,64 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: stolon-keeper
+spec:
+  template:
+    metadata:
+      labels:
+        name: stolon-keeper
+        stolon-cluster: "kube-stolon"
+        stolon-keeper: "true"
+
+    spec:
+      nodeSelector:
+        node: postgres
+      containers:
+      - name: stolon-keeper
+        image: nebirhos/stolon:master
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: KEEPER
+            value: "true"
+          - name: STKEEPER_CLUSTER_NAME
+          # TODO(sgotti) Get cluster name from "stoloncluster" label using a downward volume api instead of duplicating the name here
+            value: "kube-stolon"
+          - name: STKEEPER_STORE_BACKEND
+            value: "etcd" # Or consul
+          - name: STKEEPER_STORE_ENDPOINTS
+            value: "{% for srv in groups['etcd'] %}{{ hostvars[srv]['access_ip'] | default(hostvars[srv]['ip']|default(hostvars[srv]['ansible_default_ipv4']['address'])) }}:2379{% if not loop.last %},{% endif %}{% endfor %}"
+            # Enable debugging
+          - name: STKEEPER_PG_REPL_USERNAME
+            value: "repluser"
+            # Or use a password file like in the below supersuser password
+          - name: STKEEPER_PG_REPL_PASSWORD
+            value: "replpassword"
+          - name: STKEEPER_PG_SU_USERNAME
+            value: "postgres"
+          - name: STKEEPER_PG_SU_PASSWORDFILE
+            value: "/etc/secrets/stolon/password"
+          - name: STKEEPER_PG_MAX_CONNECTIONS
+            value: "{{ crs.postgres.master.max_connections }}"
+          - name: STKEEPER_DEBUG
+            value: "true"
+
+        resources:
+          requests:
+            cpu: {{ crs.postgres.master.resources.requests.cpu }}
+            memory: {{ crs.postgres.master.resources.requests.memory }}
+        ports:
+          - containerPort: 5431
+          - containerPort: 5432
+        volumeMounts:
+        - mountPath: /stolon-data
+          name: data
+        - mountPath: /etc/secrets/stolon
+          name: stolon
+
+      volumes:
+        - name: data
+          hostPath:
+            path: /data/stolon
+        - name: stolon
+          secret:
+            secretName: stolon

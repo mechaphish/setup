@@ -1,0 +1,11 @@
+- name: 'Clone Setup repository'
+  git:
+    repo="git@git.seclab.cs.ucsb.edu:cgc/setup.git"
+    dest="{{ addusers.crs.home }}/setup"
+    accept_hostkey="yes"
+    update="no"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Set shell variables for login user'
+  include: shellenv.yml

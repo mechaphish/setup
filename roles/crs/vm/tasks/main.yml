@@ -1,0 +1,19 @@
+---
+- name: 'Install kvm'
+  apt: name={{ item }} state="latest" update_cache="yes"
+  with_items:
+    - kvm
+
+- name: 'Deploy VM image'
+  include: deploy-vm.yml
+
+- name: 'Set permissions to 666 for /dev/kvm'
+  copy:
+    src="kvm-permission.service"
+    dest="/etc/systemd/system/kvm-permission.service"
+  notify:
+    - reload systemd
+    - enable kvm-permission
+    - start kvm-permission
+
+- meta: flush_handlers

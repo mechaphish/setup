@@ -1,0 +1,19 @@
+- name: 'Set authorized_keys'
+  authorized_key: user={{user.name}} key={{ item }}
+  with_items: "{{ user.authorized_keys }}"
+
+- name: 'Set .ssh/config'
+  lineinfile:
+    dest="/home/{{ user.name }}/.ssh/config"
+    line="StrictHostKeyChecking no"
+    create="yes"
+    owner="{{ user.name }}"
+    group="{{ user.group|default(user.name) }}"
+
+- name: 'Add user to sudoers'
+  lineinfile:
+    dest="/etc/sudoers.d/{{ user.name }}"
+    line="{{user.name}}    ALL=(ALL:ALL) NOPASSWD:ALL"
+    state="present"
+    create="yes"
+    validate='visudo -cf %s'

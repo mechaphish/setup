@@ -1,0 +1,5 @@
+---
+dependencies:
+  - role: adduser
+    user: "{{ addusers.crs }}"
+  - role: vagrant

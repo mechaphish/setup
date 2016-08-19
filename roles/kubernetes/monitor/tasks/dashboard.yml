@@ -1,0 +1,23 @@
+---
+- name: Create dashboard dir
+  file: path="/etc/kubernetes/dashboard" state="directory" mode=0755
+
+- name: Copy dashboard manifests
+  copy: src="{{ item.file }}" dest="/etc/kubernetes/{{ item.file }}"
+  with_items:
+    - {file: "dashboard/dashboard-controller.yaml", name: "kubernetes-dashboard-v1.0.1"}
+    - {file: "dashboard/dashboard-service.yaml", name: "kubernetes-dashboard"}
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Start dashboard resources
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: /etc/kubernetes/{{ item.file }}
+    state: "latest"
+    namespace: "kube-system"
+  with_items:
+    - {file: "dashboard/dashboard-controller.yaml", name: "kubernetes-dashboard-v1.0.1", type: "rc"}
+    - {file: "dashboard/dashboard-service.yaml", name: "kubernetes-dashboard", type: "svc"}
+  when: inventory_hostname == groups['kube-master'][0]

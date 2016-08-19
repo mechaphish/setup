@@ -1,0 +1,9 @@
+[Unit]
+Description=Enable CPU hi-perfomance
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor"
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+# Deployed by Ansible
+{% if (ansible_service_mgr in ["sysvinit","upstart"] and ansible_os_family == "Debian") or (ansible_os_family == "CoreOS") %}
+DOCKER_OPTS="--bip=10.13.37.1/24"
+{% else %}
+OPTIONS="--bip=10.13.37.1/24"
+{% endif %}

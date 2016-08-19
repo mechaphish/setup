@@ -1,0 +1,7 @@
+---
+# docker_image command would be nicer, but it depends on docker-py
+- name: Provision Kubernetes images
+  shell: "docker pull {{ item }}"
+  with_items: "{{ provisioned_images }}"
+  register: docker_pull
+  changed_when: "'Downloaded newer image' in docker_pull.stdout"

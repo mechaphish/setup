@@ -1,0 +1,8 @@
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = static:{{ crs.smtp.username }}:{{ crs.smtp.password }}
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = encrypt
+header_size_limit = 4096000
+relayhost = [{{ crs.smtp.host }}]:{{ crs.smtp.port }}
+mydomain = {{ crs.smtp.domain }}
+inet_interfaces = all

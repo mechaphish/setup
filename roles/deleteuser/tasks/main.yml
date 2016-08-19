@@ -1,0 +1,20 @@
+- name: 'Killall user processes'
+  shell: "killall -9 -u {{ user.name }}"
+  ignore_errors: True
+
+- name: 'Remove user from sudoers'
+  file: path="/etc/sudoers.d/{{ user.name }}" state="absent"
+  when: "user.system == False"
+
+- name: 'Remove user'
+  user: name="{{ user.name }}" state="absent"
+
+- name: 'Remove user home'
+  file: path="{{ user.home }}" state="absent"
+  when: "user.createhome == True"
+
+- name: 'Delete user group'
+  group:
+    name={{user.group|default(user.name)}}
+    system={{user.system|default(omit)}}
+    state="absent"

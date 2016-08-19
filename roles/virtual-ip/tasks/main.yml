@@ -1,0 +1,137 @@
+---
+- name: Install packages
+  package:
+    name: '{{ item }}'
+    state: latest
+  with_items:
+    - pcs
+    - fence-agents
+
+- name: Install orderedhash gem that is missing from package
+  command: gem install orderedhash
+  become: yes
+
+- name: Fix IPv6 bindings 1/2
+  replace:
+    dest: /usr/share/pcsd/ssl.rb
+    regexp: ":BindAddress(\\s+=>\\s+)'::'"
+    replace: ":BindAddress\\1'*'"
+
+- name: Fix IPv6 bindings 2/2
+  replace:
+    dest: /usr/share/pcsd/ssl.rb
+    regexp: ":Host(\\s+=>\\s+)'::'"
+    replace: ":Host\\1''"
+
+- name: Fix incorrect search path
+  replace:
+    dest: /usr/lib/python2.7/dist-packages/pcs/cluster.py
+    regexp: '"find /var/lib '
+    replace: '"find /var/lib/pacemaker/cib '
+
+- name: Create Pacemaker user
+  user:
+    name: "{{ pacemaker_user }}"
+    comment: "Pacemaker HA Cluster"
+    password: "{{ pacemaker_password_crypted }}"
+  notify:
+    - disable corosync
+    - stop corosync
+
+- meta: flush_handlers
+
+- name: Remove /etc/corosync/corosync.conf
+  file: name=/etc/corosync/corosync.conf state=absent
+  notify:
+    - reload systemd
+    - enable pcsd
+    - restart pcsd
+
+- meta: flush_handlers
+
+- name: "Wait for pcsd coming up on all {{ groups[cluster_group] }}"
+  pause: seconds=10
+
+- name: Authenticate cluster nodes
+  command: "pcs cluster auth -u '{{ pacemaker_user }}' -p '{{ pacemaker_password }}' {{ groups[cluster_group]|join(' ') }}"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+
+- name: Setup cluster
+  command: "pcs cluster setup --start --name {{ cluster_group }} --force {{ groups[cluster_group]|join(' ') }}"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+
+- name: Configure corosync
+  template: src=corosync.conf.j2 dest=/etc/corosync/corosync.conf
+  notify:
+    - reload systemd
+    - enable pcsd
+    - restart pcsd
+    - enable corosync
+    - restart corosync
+    - enable pacemaker
+    - restart pacemaker
+
+- meta: flush_handlers
+
+- name: "Wait for pacemaker and corosync to come up on all {{ groups[cluster_group] }}"
+  pause: seconds=10
+
+- name: Authenticate cluster nodes
+  command: "pcs cluster auth -u '{{ pacemaker_user }}' -p '{{ pacemaker_password }}' {{ groups[cluster_group]|join(' ') }}"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+
+
+# Virtual IP address
+#
+- name: Create VIP as cluster resource
+  command: "pcs resource create {{ cluster_group }}-vip IPaddr ip='{{ cluster_vip }}' cidr_netmask={{ cluster_vip_netmask }} --group master op monitor interval=5s timeout=10s op start interval=0s timeout=10s op stop interval=0s timeout=10s"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+
+- name: Set migration threshold to 100,000
+  command: "crm_resource --meta --resource {{ cluster_group }}-vip -p migration-threshold -v 100000"
+  become: yes
+
+- name: Set failure-timeout to 60s
+  command: "crm_resource --meta --resource {{ cluster_group }}-vip -p failure-timeout -v 60"
+  become: yes
+
+# Daemons
+#
+
+- name: "Create systemd resources {{ item }}"
+  command: "pcs resource create {{ cluster_group }}-{{ item }} systemd:{{ item }} --group=master --force op monitor interval=5s timeout=20s op start interval=0s timeout=20s requires=nothing on-fail=restart"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+  with_items: "{{ cluster_daemons|default([]) }}"
+
+- name: "Set systemd resources {{ item }} as clone"
+  command: "pcs resource clone {{ cluster_group }}-{{ item }}"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+  with_items: "{{ cluster_daemons|default([]) }}"
+
+- name: "Set migration threshold to 100,000 for {{ cluster_group }}-{{ item }}"
+  command: "crm_resource --meta --resource {{ cluster_group }}-{{ item }} -p migration-threshold -v 100000"
+  become: yes
+  with_items: "{{ cluster_daemons|default([]) }}"
+
+- name: "Set failure-timeout to 60s for {{ cluster_group }}-{{ item }}"
+  command: "crm_resource --meta --resource {{ cluster_group }}-{{ item }} -p failure-timeout -v 60"
+  become: yes
+  with_items: "{{ cluster_daemons|default([]) }}"
+
+# Global settings
+#
+- name: Do not shoot the other node in the head
+  command: "pcs property set stonith-enabled=false"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]
+
+- name: Failures are not fatal
+  command: "pcs property set start-failure-is-fatal=false"
+  become: yes
+  when: inventory_hostname == groups[cluster_group][0]

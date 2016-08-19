@@ -1,0 +1,44 @@
+- name: 'Add k alias for kubectl'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/.bashrc"
+    regexp="^alias k=kubectl$"
+    line="alias k=kubectl"
+    create="yes"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Add PATH var'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/.bashrc"
+    regexp="^export PATH=.*tools$"
+    line="export PATH=$PATH:{{ addusers.crs.home }}/setup/tools"
+    create="yes"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Add NODE_SET var'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/.bashrc"
+    regexp="^export NODE_SET="
+    line="export NODE_SET={{ crs.node_set }}"
+    create="yes"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Add REGISTRY_NODE var'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/.bashrc"
+    regexp="^export REGISTRY_NODE="
+    line="export REGISTRY_NODE={{ crs.registry_node }}"
+    create="yes"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"
+
+- name: 'Add VC_NODE var'
+  lineinfile:
+    dest="{{ addusers.crs.home }}/.bashrc"
+    regexp="^export VC_NODE="
+    line="export VC_NODE={{ crs.virtualcompetition.node }}"
+    create="yes"
+  become: yes
+  become_user: "{{ addusers.crs.name }}"

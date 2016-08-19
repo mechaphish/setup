@@ -1,0 +1,8 @@
+---
+dependencies:
+  - role: deleteuser
+    user: "{{ deleteusers.crs }}"
+  - role: deleteuser
+    user: "{{ deleteusers.etcd }}"
+  - role: deleteuser
+    user: "{{ deleteusers.kube }}"

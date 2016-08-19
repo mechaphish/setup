@@ -1,0 +1,9 @@
+[Unit]
+Description=Allow world access to /dev/kvm
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "chmod 666 /dev/kvm"
+
+[Install]
+WantedBy=multi-user.target

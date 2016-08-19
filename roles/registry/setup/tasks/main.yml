@@ -1,0 +1,26 @@
+---
+# Docker registry install
+# -----------------------
+
+- name: 'Clone repository'
+  git:
+    repo="git@git.seclab.cs.ucsb.edu:angr/docker-registry.git"
+    dest="{{ registry_path }}"
+    update="yes"
+    accept_hostkey="yes"
+    key_file="{{ addusers.crs.home }}/.ssh/id_rsa"
+
+- name: 'Install python-pip'
+  apt: name="python-pip" state="present"
+
+- name: 'Install docker-composer'
+  pip: name="docker-compose"
+
+- name: 'Copy systemd conf'
+  template: src="systemd.service.j2" dest="/etc/systemd/system/docker-registry.service"
+  notify:
+    - reload systemd
+    - enable docker-registry
+    - restart docker-registry
+
+- meta: flush_handlers

@@ -1,0 +1,21 @@
+---
+- name: Copy skydns manifests
+  template: src={{item.file}} dest=/etc/kubernetes/{{item.name}}
+  with_items:
+    - {file: skydns-rc.yaml.j2, name: skydns-rc.yaml}
+    - {file: skydns-svc.yaml.j2, name: skydns-svc.yaml}
+  register: manifests
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Start skydns resources
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: /etc/kubernetes/{{ item.file }}
+    state: "latest"
+    namespace: "kube-system"
+  with_items:
+    - {name: "kube-dns-v11", file: skydns-rc.yaml, type: "rc"}
+    - {name: "kube-dns", file: skydns-svc.yaml, type: "svc"}
+  when: inventory_hostname == groups['kube-master'][0]

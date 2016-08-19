@@ -1,0 +1,29 @@
+---
+- name: Create influxdb dir
+  file: path="/etc/kubernetes/influxdb" state="directory" mode=0755
+
+- name: Copy influxdb manifests
+  template: src="{{ item.file }}" dest="/etc/kubernetes/{{ item.file }}"
+  with_items:
+    - {file: "influxdb/heapster-service.yaml", name: "heapster", type: "svc"}
+    - {file: "influxdb/heapster-controller.yaml", name: "heapster-v1.0.2", type: "rc"}
+    - {file: "influxdb/grafana-service.yaml", name: "monitoring-grafana", type: "svc"}
+    - {file: "influxdb/influxdb-service.yaml", name: "monitoring-influxdb", type: "svc"}
+    - {file: "influxdb/influxdb-grafana-controller.yaml", name: "monitoring-influxdb-grafana-v3", type: "rc"}
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Start influxdb resources
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: /etc/kubernetes/{{ item.file }}
+    state: "latest"
+    namespace: "kube-system"
+  with_items:
+    - {file: "influxdb/heapster-service.yaml", name: "heapster", type: "svc"}
+    - {file: "influxdb/heapster-controller.yaml", name: "heapster-v1.0.2", type: "deployment"}
+    - {file: "influxdb/grafana-service.yaml", name: "monitoring-grafana", type: "svc"}
+    - {file: "influxdb/influxdb-service.yaml", name: "monitoring-influxdb", type: "svc"}
+    - {file: "influxdb/influxdb-grafana-controller.yaml", name: "monitoring-influxdb-grafana-v3", type: "rc"}
+  when: inventory_hostname == groups['kube-master'][0]

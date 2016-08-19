@@ -1,0 +1,14 @@
+[Unit]
+Description=cgc-poller
+
+
+[Service]
+Environment="NODE_SET={{ crs.node_set }}"
+User={{ addusers.crs.name }}
+WorkingDirectory={{ addusers.crs.home }}
+ExecStart=/usr/local/bin/cgc-poller
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

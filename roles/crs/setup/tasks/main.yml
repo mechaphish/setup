@@ -1,0 +1,37 @@
+---
+- name: 'Kernel settings for AFL'
+  include: afl.yml
+
+- name: 'Configure login user'
+  include: configure_user.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Reset node labels'
+  shell: "kubectl label nodes {{ item }} node-"
+  with_items: "{{ groups['kube-cluster'] }}"
+  # Only on one kube-apiserver
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: 'Deploy Postgres'
+  include: deploy_postgres.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Deploy CGC API service'
+  include: deploy_cgc_api_service.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Deploy Meister'
+  include: deploy_meister.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Deploy Scriba'
+  include: deploy_scriba.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Deploy Ambassador'
+  include: deploy_ambassador.yml
+  when: inventory_hostname in groups['kube-master']
+
+- name: 'Deploy network-dude'
+  include: deploy_networkdude.yml
+  when: inventory_hostname in groups['kube-master']

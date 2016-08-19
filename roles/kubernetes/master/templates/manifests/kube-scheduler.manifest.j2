@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-scheduler
+  namespace: kube-system
+spec:
+  hostNetwork: true
+  containers:
+  - name: kube-scheduler
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+    image: {{ hyperkube_image_repo }}:{{ hyperkube_image_tag }}
+    command:
+    - /hyperkube
+    - scheduler
+    - --leader-elect=true
+    - --leader-elect-lease-duration=60s
+    - --leader-elect-renew-deadline=55s
+    - --master=http://127.0.0.1:{{kube_apiserver_insecure_port}}
+    - --v={{ kube_log_level | default('2') }}
+    - --kube-api-burst=10000
+    - --kube-api-qps=1000
+    - --profiling=false
+    livenessProbe:
+      httpGet:
+        host: 127.0.0.1
+        path: /healthz
+        port: 10251
+      initialDelaySeconds: 30
+      timeoutSeconds: 10

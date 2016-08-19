@@ -1,0 +1,5 @@
+deb http://ftp.ucsb.edu/pub/mirrors/linux/ubuntu-archive/ xenial main restricted universe multiverse
+deb http://ftp.ucsb.edu/pub/mirrors/linux/ubuntu-archive/ xenial-updates main restricted universe multiverse
+deb-src http://ftp.ucsb.edu/pub/mirrors/linux/ubuntu-archive/ xenial main restricted universe multiverse
+deb-src http://ftp.ucsb.edu/pub/mirrors/linux/ubuntu-archive/ xenial-updates main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu xenial-security main restricted universe multiverse

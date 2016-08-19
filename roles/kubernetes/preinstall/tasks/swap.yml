@@ -1,0 +1,10 @@
+---
+- name: swap | set vm.swapiness to 0
+  sysctl: name=vm.swappiness value=0 state=present
+
+- name: swap | swapoff
+  command: /sbin/swapoff -a
+  changed_when: False
+
+- name: swap | remove swap from /etc/fstab
+  lineinfile: dest=/etc/fstab state=absent regexp='(\S+\s+){2}swap(\s+\S+){3}'

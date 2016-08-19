@@ -1,0 +1,51 @@
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+  name: ambassador
+spec:
+  template:
+    metadata:
+      name: ambassador
+      labels:
+        app: ambassador
+    spec:
+      nodeSelector:
+        node: meister
+      containers:
+      - name: ambassador
+        image: {{ crs.registry_node }}/{{ crs.ambassador.image }}
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: {{ crs.ambassador.resources.requests.cpu }}
+            memory: {{ crs.ambassador.resources.requests.memory }}
+        env:
+        - name: CGC_API_USER
+          value: "team-6"
+        - name: CGC_API_PASS
+          value: "changeme"
+        - name: AMBASSADOR_LOG_LEVEL
+          value: "{{ crs.ambassador.log_level }}"
+        - name: SUBMIT_ROUNDS_INTERVAL
+          value: "3"
+        - name: POSTGRES_DATABASE_NAME
+          value: "farnsworth"
+        - name: POSTGRES_DATABASE_PASSWORD
+          value: ""
+        - name: POSTGRES_DATABASE_USER
+          value: "postgres"
+        - name: POSTGRES_USE_SLAVES
+          value: "False"
+        - name: POSTGRES_MASTER_CONNECTIONS
+          value: "20"
+
+        - name: SMTP_USER
+          value: "user"
+        - name: SMTP_PASS
+          value: "changeme"
+        - name: SMTP_HOST
+          value: "smtp.sendgrid.net"
+        - name: SMTP_FROM
+          value: "alert@mydomain.net"
+        - name: SMTP_TO
+          value: "foot@email.com"

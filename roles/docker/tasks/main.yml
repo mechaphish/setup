@@ -1,0 +1,97 @@
+---
+- name: gather os specific variables
+  include_vars: "{{ item }}"
+  with_first_found:
+    - files:
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_version|lower|replace('/', '_') }}.yml"
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_release }}.yml"
+      - "{{ ansible_distribution|lower }}-{{ ansible_distribution_major_version|lower|replace('/', '_') }}.yml"
+      - "{{ ansible_distribution|lower }}.yml"
+      - "{{ ansible_os_family|lower }}.yml"
+      - defaults.yml
+      paths:
+      - ../vars
+      skip: true
+
+- name: check for minimum kernel version
+  fail:
+    msg: >
+          docker requires a minimum kernel version of
+          {{ docker_kernel_min_version }} on
+          {{ ansible_distribution }}-{{ ansible_distribution_version }}
+  when: (ansible_os_family != "CoreOS") and (ansible_kernel|version_compare(docker_kernel_min_version, "<"))
+
+- name: ensure docker repository public key is installed
+  action: "{{ docker_repo_key_info.pkg_key }}"
+  args:
+    id: "{{item}}"
+    keyserver: "{{docker_repo_key_info.keyserver}}"
+    state: present
+  with_items: "{{ docker_repo_key_info.repo_keys }}"
+  when: ansible_os_family != "CoreOS"
+
+- name: ensure docker repository is enabled
+  action: "{{ docker_repo_info.pkg_repo }}"
+  args:
+    repo: "{{item}}"
+    state: present
+    update_cache: yes
+    filename: docker
+  with_items: "{{ docker_repo_info.repos }}"
+  when: (ansible_os_family != "CoreOS") and (docker_repo_info.repos|length > 0)
+
+- name: Configure docker repository on RedHat/CentOS
+  copy:
+    src: "rh_docker.repo"
+    dest: "/etc/yum.repos.d/docker.repo"
+  when: ansible_distribution in ["CentOS","RedHat"] and
+        ansible_distribution_major_version >= 7
+
+- name: Ensure docker networking does not break CGC cloud VPN | Check docker is installed
+  command: "dpkg -s {{ docker_versioned_pkg.latest }}"
+  ignore_errors: yes
+  changed_when: False
+  register: docker_is_installed
+
+- name: Ensure docker networking does not break CGC cloud VPN | Copy default configs
+  template:
+    src: docker
+    dest: "/etc/default/docker"
+    owner: root
+    group: root
+    mode: 0644
+  when: "docker_is_installed.rc != 0"
+
+- name: Ensure docker networking does not break CGC cloud VPN | Write docker.service systemd file
+  template:
+    src: systemd-docker.service
+    dest: /etc/systemd/system/docker.service
+  when: ansible_service_mgr == "systemd" and ansible_os_family != "CoreOS"
+
+- name: ensure docker packages are installed
+  action: "{{ docker_package_info.pkg_mgr }}"
+  args:
+    pkg: "{{item.name}}"
+    force: "{{item.force|default(omit)}}"
+    state: present
+  with_items: "{{ docker_package_info.pkgs }}"
+  when: (ansible_os_family != "CoreOS") and (docker_package_info.pkgs|length > 0)
+
+- name: allow for proxies on systems using systemd
+  include: systemd-proxies.yml
+  when: ansible_service_mgr == "systemd" and
+        (http_proxy is defined or https_proxy is defined or no_proxy is defined)
+
+- name: fix docker crash with too many containers on systemd
+  include: systemd-tasksmax.yml
+  when: ansible_service_mgr == "systemd"
+
+- meta: flush_handlers
+
+- name: ensure docker service is started and enabled
+  service:
+    name: "{{ item }}"
+    enabled: yes
+    state: started
+  with_items:
+    - docker

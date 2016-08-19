@@ -1,0 +1,9 @@
+- name: reload systemd
+  command: systemctl daemon-reload
+  when: ansible_service_mgr == "systemd"
+
+- name: enable docker-registry
+  command: systemctl enable docker-registry
+
+- name: restart docker-registry
+  service: name="docker-registry" state="restarted"

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+export CGC_API_SERVICE_URL=192.168.1.20:1996
+export SLEEP=3
+export API_DOWN_RETRIES=10
+
+function log {
+    echo "[`date '+%Y-%m-%d %H:%M:%S'`] $1"
+}
+
+function sendalert {
+    recipients="foo@email.com,ciccio@email.com"
+    from="MechaPhish server <crs@mydomain.net>"
+    subject="CGC TI API is now up"
+    body="Be sure everything is working! If Francesco is not in the lab, you can ping him at xxx-xxx-xxxx"
+    printf "From: ${from}\nSubject: ${subject}\n\n\n${body}" | sendmail "$recipients"
+}
+
+api_status='down'
+api_down_try=0
+while true
+do
+    curl -s --max-time $SLEEP --connect-timeout $SLEEP $CGC_API_SERVICE_URL
+    if [ $? -eq 0 ]; then
+        if [ $api_status == "down" ]; then
+            api_status='up'
+            api_down_try=0
+            log "=> CGC TI API is now up"
+            sendalert
+
+            ~/setup/tools/crs start
+        fi
+        sleep $SLEEP
+
+    else
+        ((api_down_try++))
+        if [ $api_down_try -eq $API_DOWN_RETRIES ]; then
+            api_down_try=0
+            if [ $api_status == "up" ]; then
+                api_status='down'
+                log "=> CGC TI API is now down"
+            fi
+        fi
+        sleep 1                 # curl timeout is unreliable, sleep at least 1 second
+    fi
+    log "Polling: $api_status"
+done

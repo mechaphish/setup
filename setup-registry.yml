@@ -1,0 +1,6 @@
+---
+- hosts: registry
+  roles:
+    - { role: common/setup, tags: common }
+    - { role: docker, tags: docker }
+    - { role: registry/setup, tags: registry }

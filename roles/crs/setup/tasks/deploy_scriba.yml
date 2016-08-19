@@ -1,0 +1,22 @@
+---
+- name: Create Scriba manifests folder
+  file:
+    path="{{ crs_manifests_path }}/scriba"
+    state=directory
+
+- name: Copy Scriba manifests
+  template: src="{{ item.file }}" dest="{{ crs_manifests_path }}/{{ item.file }}"
+  with_items:
+    - {name: scriba, file: scriba/replication.yml, type: "rc"}
+  register: manifests
+
+- name: Deploy Scriba
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "latest"
+  with_items:
+    - {name: scriba, file: scriba/replication.yml, type: "rc"}
+  when: inventory_hostname == groups['kube-master'][0]

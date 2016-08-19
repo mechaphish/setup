@@ -1,0 +1,11 @@
+- name: 'reload sysctl'
+  service: name="procps" state="restarted"
+
+- name: 'reload systemd'
+  command: systemctl daemon-reload
+
+- name: 'enable kvm-permission'
+  command: systemctl enable kvm-permission
+
+- name: 'start kvm-permission'
+  service: name="kvm-permission" state="started"

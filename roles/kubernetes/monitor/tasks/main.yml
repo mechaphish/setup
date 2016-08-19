@@ -1,0 +1,6 @@
+---
+- name: Dashboard
+  include: dashboard.yml
+
+- name: InfluxDB
+  include: influxdb.yml

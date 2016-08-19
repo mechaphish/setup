@@ -1,0 +1,27 @@
+---
+- name: Create Ambassador manifests folder
+  file:
+    path="{{ crs_manifests_path }}/ambassador"
+    state=directory
+
+- name: Copy Ambassador manifests
+  template: src="{{ item.file }}" dest="{{ crs_manifests_path }}/{{ item.file }}"
+  with_items:
+    - {name: ambassador, file: ambassador/daemonset.yml, type: "ds"}
+  register: manifests
+
+- name: Label Ambassador nodes
+  shell: "kubectl label nodes {{ item }} node=ambassador --overwrite"
+  with_items: "{{ groups['ambassador'] }}"
+  when: inventory_hostname == groups['kube-master'][0]
+
+- name: Deploy Ambassador
+  kube:
+    name: "{{ item.name }}"
+    kubectl: "{{ bin_dir }}/kubectl"
+    resource: "{{ item.type }}"
+    filename: "{{ crs_manifests_path }}/{{ item.file }}"
+    state: "latest"
+  with_items:
+    - {name: ambassador, file: ambassador/daemonset.yml, type: "ds"}
+  when: inventory_hostname == groups['kube-master'][0]

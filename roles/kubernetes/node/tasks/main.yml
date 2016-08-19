@@ -1,0 +1,44 @@
+---
+- include: install.yml
+
+- name: Write Calico cni config
+  template:
+    src: "cni-calico.conf.j2"
+    dest: "/etc/cni/net.d/10-calico.conf"
+    owner: kube
+  when: kube_network_plugin == "calico"
+
+- name: Write kubelet config file
+  template: src=kubelet.j2 dest={{ kube_config_dir }}/kubelet.env backup=yes
+  notify:
+    - restart kubelet
+
+- name: write the kubecfg (auth) file for kubelet
+  template: src=node-kubeconfig.yaml.j2 dest={{ kube_config_dir }}/node-kubeconfig.yaml backup=yes
+  notify:
+    - restart kubelet
+
+- name: Write proxy manifest
+  template:
+    src: manifests/kube-proxy.manifest.j2
+    dest: "{{ kube_manifest_dir }}/kube-proxy.manifest"
+
+- name: Pause
+  pause: seconds=5
+
+- name: Restart kubelet if binary changed
+  command: /bin/true
+  notify: restart kubelet
+  when: kubelet_copy.stdout_lines
+
+# reload-systemd
+- meta: flush_handlers
+
+- name: Pause
+  pause: seconds=10
+
+- name: Enable kubelet
+  service:
+    name: kubelet
+    enabled: yes
+    state: started

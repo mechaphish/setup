@@ -1,0 +1,486 @@
+#!/usr/bin/python
+
+"""
+Copyright (C) 2015 - Brian Caswell <bmc@lungetech.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+"""
+
+import argparse
+import logging
+import select
+import socket
+import struct
+import sys
+
+# sys.path.append('.')
+import ids
+
+
+class Connection(object):
+    CLIENT, SERVER = (0, 1)
+    CLIENT_COUNT, CLIENT_CHUNK_HEADER, CLIENT_CHUNK_DATA, SERVER_DATA = range(4)
+
+    def __init__(self, proxy, client_sock, client_address, outbound_ip,
+                 network_filter, should_negotiate, connection_id, pcap_dest, csid):
+        self.proxy = proxy
+        self.client = client_sock
+        self.client_address = client_address
+        self.network_filter = network_filter
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.connection_id = connection_id % 0xFFFFFFFF
+        self.pcap_dest = pcap_dest
+        self.csid = csid
+
+        if pcap_dest is not None:
+            self.pcap_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        else:
+            self.pcap_sock = None
+
+        self.message_id = 0
+
+        if outbound_ip is not None:
+            address = (outbound_ip, client_address[1])
+            logging.debug('creating outgoing socket: %s', repr(address))
+            self.server.bind(address)
+
+        self._setup_socket(self.client)
+        self._setup_socket(self.server)
+
+        self.data = {
+            self.client: {
+                'write_buffer': '',
+                'side': Connection.CLIENT,
+                'ip': self.client_address
+            },
+            self.server: {
+                'write_buffer': '',
+                'side': Connection.SERVER,
+                'ip': self.proxy.server_address
+            }
+        }
+
+        self.negotation = None
+        if should_negotiate:
+            self.negotation = {
+                'state': Connection.CLIENT_COUNT,
+                'raw_client_data': '',
+                'tlv_left': 0,
+                'server_data_left': 4,
+            }
+
+        self.connected = False
+        self.server.connect_ex(self.proxy.server_address)
+
+    @staticmethod
+    def _setup_socket(sock):
+        sock.setblocking(0)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER,
+                        struct.pack('ii', 1, 5))
+
+    def other(self, sock):
+        if sock == self.client:
+            return self.server
+        else:
+            return self.client
+
+    def handle_negotation_client(self, data):
+        if self.negotation['state'] not in [Connection.CLIENT_COUNT, Connection.CLIENT_CHUNK_HEADER, Connection.CLIENT_CHUNK_DATA]:
+            logging.debug("invalid negotation state")
+            self.close()
+            return ''
+
+        self.negotation['raw_client_data'] += data
+        if self.negotation['state'] == Connection.CLIENT_COUNT:
+            if len(self.negotation['raw_client_data']) < 4:
+                return ''
+
+            raw_client_size = self.negotation['raw_client_data'][:4]
+            self.negotation['raw_client_data'] = self.negotation['raw_client_data'][4:]
+            self.negotation['tlv_left'] = struct.unpack('<L', raw_client_size)[0]
+            self.write_data(self.client, raw_client_size)
+            self.negotation['state'] = Connection.CLIENT_CHUNK_HEADER
+       
+        while True:
+            if self.negotation['state'] == Connection.CLIENT_CHUNK_HEADER:
+                if not self.negotation['tlv_left']:
+                    self.negotation['state'] = Connection.SERVER_DATA
+                    break
+
+                header_size = 8
+                if len(self.negotation['raw_client_data']) < header_size:
+                    return ''
+                
+                raw_chunk_header = self.negotation['raw_client_data'][:header_size]
+                self.negotation['raw_client_data'] = self.negotation['raw_client_data'][header_size:]
+                self.negotation['chunk_size'] = struct.unpack('<LL', raw_chunk_header)[1]
+                self.write_data(self.client, raw_chunk_header)
+                self.negotation['state'] = Connection.CLIENT_CHUNK_DATA
+                
+            if self.negotation['state'] == Connection.CLIENT_CHUNK_DATA:
+                chunk_size = self.negotation['chunk_size']
+                if len(self.negotation['raw_client_data']) < chunk_size:
+                    return ''
+                
+                chunk = self.negotation['raw_client_data'][:chunk_size]
+                self.negotation['raw_client_data'] = self.negotation['raw_client_data'][chunk_size:]
+                self.negotation['state'] = Connection.CLIENT_CHUNK_HEADER
+                self.write_data(self.client, chunk)
+                self.negotation['tlv_left'] -= 1
+
+        rest = self.negotation['raw_client_data']
+        self.negotation['raw_client_data'] = ''
+        return rest
+
+    def handle_negotation_server(self, data):
+        if self.negotation['state'] != Connection.SERVER_DATA:
+            logging.debug("invalid negotation state")
+            self.close()
+            return ''
+
+        left = self.negotation['server_data_left']
+
+        rest = data[left:]
+        data = data[:left]
+
+        left -= len(data)
+
+        self.negotation['server_data_left'] = left
+        self.write_data(self.server, data)
+
+        if not left:
+            self.negotation = None
+       
+        return rest
+
+    def handle_negotation(self, sock, data):
+        logging.debug("negotation: %s - %s - %s", repr(sock), repr(data), repr(self.negotation))
+
+        if sock == self.client:
+            return self.handle_negotation_client(data)
+        else:
+            return self.handle_negotation_server(data)
+
+    def write_data(self, sock, data):
+        if not len(data):
+            return
+
+        other_side = self.other(sock)
+        self.data[other_side]['write_buffer'] += data
+
+        self.proxy.add_writable(other_side)
+
+    def handle_read(self, sock):
+        if sock == self.server and not self.connected:
+            self.connected = True
+            return
+
+        try:
+            data = sock.recv(0x1000)
+        except socket.error as error:
+            logging.debug('socket error from %s: %s', self.data[sock]['ip'],
+                          error)
+            data = ""
+
+        logging.debug("read from %s: %s", self.data[sock]['ip'], repr(data))
+
+        if len(data) == 0:
+            self.close()
+            return
+
+        if self.negotation is not None:
+            data = self.handle_negotation(sock, data)
+            if not len(data):
+                return
+
+        try:
+            if self.data[sock]['side'] == Connection.CLIENT:
+                output = ''
+                logging.info('Applying new guy')
+                for curr_c in data:
+                    co = ord(curr_c)
+                    if co == 0:
+                        co = 0x43
+                    elif co == 0x43:
+                        co = 0x0a
+                    elif co == 0x0a:
+                        co = 0x31
+                    elif co == 0x31:
+                        co = 0x00
+
+                    output += chr(co)
+            else:
+                output = data
+
+            #output, results = self.network_filter(self,
+            #                                      self.data[sock]['side'],
+            #                                      data)
+            
+            #for result in results:
+            #    logging.info('filter matched: %s', repr(result))
+            assert len(output) == len(data)
+            data = output
+
+        except ids.base.NetworkFilterException as error:
+            logging.info('blocking connection: %s', error)
+            self.close()
+            return
+
+        self.write_data(sock, data)
+
+    def remote_log(self, sock, data):
+        if self.pcap_sock is None:
+            return
+        
+        logging.debug('should remote log...')
+        
+        # message format: 
+        # 4 bytes - CSID
+        # 4 bytes - connection ID
+        # 4 bytes - message ID
+        # 2 bytes - message length
+        # 1 byte - client/server
+        # 
+        # Max message length = 1024
+
+        if sock == self.client:
+            side = Connection.CLIENT
+        else:
+            side = Connection.SERVER
+
+        while len(data):
+            message = data[:1024]
+            data = data[1024:]
+            packed = struct.pack('<LLLHB', self.csid, self.connection_id, self.message_id, len(message), side) + message
+
+            self.pcap_sock.sendto(packed, self.pcap_dest)
+
+            self.message_id = (self.message_id + 1 ) % 0xFFFFFFFF
+        
+        # sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # sent = sock.sendto(message, server_address)
+        # server_address = ('localhost', 10000)
+
+        #network-appliance
+        # socket.socket 
+
+
+    def handle_write(self, sock):
+        """
+        Write data to a socket
+        """
+
+        buf = self.data[sock]['write_buffer']
+        try:
+            written = sock.send(buf)
+        except socket.error as error:
+            logging.debug('socket error from %s: %s', self.data[sock]['ip'],
+                          error)
+            self.close()
+            return
+
+        logging.debug("write to %s: %s", self.data[sock]['ip'],
+                      repr(buf[:written]))
+        self.remote_log(sock, buf[:written])
+
+        buf = buf[written:]
+        self.data[sock]['write_buffer'] = buf
+
+        if len(buf) == 0:
+            self.proxy.remove_writable(sock)
+
+    def close(self):
+        logging.info("closed connection from %s", self.client_address)
+
+        for sock in [self.client, self.server]:
+            del self.network_filter[sock]
+            if sock:
+                self.proxy.remove_socket(sock)
+                sock.close()
+
+
+class Proxy(object):
+    def __init__(self, local_host, remote_host, pcap_dest, outbound_ip, max_connections, should_negotiate, csid):
+        self.outbound_ip = outbound_ip
+        self.address = local_host
+        self.server_address = remote_host
+        self.listensock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.listensock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        logging.debug('listening on: %s', repr(self.address))
+        self.listensock.bind(self.address)
+        self.listensock.listen(30)
+        self.max_connections = max_connections
+        self.should_negotiate = should_negotiate
+        self.csid = csid
+
+        self.connections_seen = 0
+
+        self.pcap_dest = pcap_dest
+
+        # map from a socket to a Connection
+        self.connections = {}
+
+        # all sockets which can be written
+        self.write_sockets = []
+
+        # all opened sockets
+        self.sockets = [self.listensock]
+
+    def __call__(self, network_filter=None):
+        while len(self.sockets):
+            readable, writable, errors = select.select(self.sockets,
+                                                       self.write_sockets,
+                                                       self.sockets)
+
+            # Disconnect any sockets with exceptions
+            for sock in errors:
+                self.connections[sock].close()
+
+            # Attempt to forward data ASAP
+            for sock in writable:
+                if sock in self.connections:
+                    self.connections[sock].handle_write(sock)
+
+            for sock in readable:
+                if sock is self.listensock:
+                    self.add_connection(network_filter)
+                elif sock in self.connections:
+                    self.connections[sock].handle_read(sock)
+
+    def add_writable(self, sock):
+        if sock not in self.write_sockets:
+            self.write_sockets.append(sock)
+
+    def remove_writable(self, sock):
+        if sock in self.write_sockets:
+            self.write_sockets.remove(sock)
+
+    def remove_socket(self, sock):
+        self.remove_writable(sock)
+
+        if sock in self.sockets:
+            self.sockets.remove(sock)
+
+        if sock in self.connections:
+            del self.connections[sock]
+
+    def add_connection(self, network_filter):
+        client_sock, client_address = self.listensock.accept()
+        try:
+            connection = Connection(self, client_sock, client_address,
+                                    self.outbound_ip, network_filter,
+                                    self.should_negotiate,
+                                    self.connections_seen, self.pcap_dest, self.csid)
+        except socket.error as error:
+            logging.info('socket error trying to bind to %s : %s',
+                         repr((self.outbound_ip, client_address[1])), error)
+            client_sock.close()
+            return
+        logging.info("proxying connection from %s to %s", client_address,
+                     self.server_address)
+
+        for sock in [client_sock, connection.server]:
+            self.connections[sock] = connection
+            self.sockets.append(sock)
+
+        self.connections_seen += 1
+        if (self.max_connections is not None and
+                self.connections_seen >= self.max_connections):
+            self.remove_socket(self.listensock)
+
+    def shutdown(self):
+        for sock in self.sockets:
+            self.remove_socket(sock)
+
+
+def main():
+    """ Parse arguments and setup the server """
+
+    parser_formatter = argparse.ArgumentDefaultsHelpFormatter
+    parser = argparse.ArgumentParser(description='CGC Proxy server',
+                                     formatter_class=parser_formatter)
+
+    required = parser.add_argument_group(title='required arguments')
+    required.add_argument('--host', required=True,
+                          help='IP address of CB server')
+    required.add_argument('--port', required=True, type=int,
+                          help='PORT of the listening CB')
+
+    parser.add_argument('--rules', required=False, type=str,
+                          help='Network Filter Rules to inspect traffic')
+    parser.add_argument('--debug', required=False, action='store_true',
+                        default=False, help='Enable debugging output')
+    parser.add_argument('--negotiate', required=False, action='store_true',
+                        default=False, help='Ignore CB negotation before '
+                        'processing traffic')
+    parser.add_argument('--listen_host', required=False, type=str,
+                        help='IP address to listen for connections',
+                        default='0.0.0.0', metavar='HOST')
+    parser.add_argument('--listen_port', required=False, type=int,
+                        help='Port for the proxy (uses --port if not defined)',
+                        metavar='PORT')
+    parser.add_argument('--outbound_host', required=False, type=str,
+                        help='IP address to use for outbound connections')
+    parser.add_argument('--max_connections', type=int,
+                        help='Maximum number of connections to handle')
+    parser.add_argument('--pcap_host', required=False, type=str,
+                        help='IP address to send pcap logs')
+    parser.add_argument('--pcap_port', required=False, type=int, default=1999, 
+                        help='Port to send pcap logs')
+    parser.add_argument('--csid', required=False, type=int, default=0)
+    parser.add_argument('--buffer_size', required=False, type=int,
+                        default=100*1024, help='Max size of inspection buffer')
+
+    args = parser.parse_args()
+
+    log_level = logging.INFO
+    if args.debug:
+        log_level = logging.DEBUG
+
+    listen_port = args.listen_port
+    if listen_port is None:
+        listen_port = args.port
+
+    logging.basicConfig(format='%(asctime)s - %(levelname)s : %(message)s',
+                        level=log_level, stream=sys.stdout)
+
+    if args.rules:
+        with open(args.rules, 'r') as rules_fh:
+            network_filter = ids.NetworkFilter(rules_fh.read(),
+                                               args.buffer_size)
+    else:
+        network_filter = ids.NetworkFilter('', args.buffer_size)
+
+    pcap_dest = None
+    if args.pcap_host is not None:
+        pcap_dest = (args.pcap_host, args.pcap_port)
+
+    server = Proxy((args.listen_host, listen_port), (args.host, args.port),
+                   pcap_dest, args.outbound_host, args.max_connections,
+                   args.negotiate, args.csid)
+    try:
+        server(network_filter)
+    except KeyboardInterrupt:
+        print "Shutting Down"
+        server.shutdown()
+
+if __name__ == '__main__':
+    main()

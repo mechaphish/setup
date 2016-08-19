@@ -1,0 +1,12 @@
+- name: reload systemd
+  command: systemctl daemon-reload
+  when: ansible_service_mgr == "systemd"
+
+- name: enable cgc-poller
+  command: systemctl enable cgc-poller
+
+- name: restart cgc-poller
+  service: name="cgc-poller" state="restarted"
+
+- name: restart postfix
+  service: name="postfix" state="restarted"

@@ -1,0 +1,5 @@
+---
+- hosts: virtualcompetition
+  roles:
+    - { role: common/setup, tags: common }
+    - { role: virtualcompetition/setup, tags: virtualcompetition }

@@ -1,0 +1,16 @@
+---
+provisioned_images:
+  - "gcr.io/google_containers/kubernetes-dashboard-amd64:v1.0.1"
+  - "gcr.io/google_containers/heapster:v1.0.2"
+  - "gcr.io/google_containers/addon-resizer:1.0"
+  - "gcr.io/google_containers/heapster_influxdb:v0.5"
+  - "gcr.io/google_containers/heapster_grafana:v2.6.0-2"
+  - "quay.io/smana/kubernetes-hyperkube:v1.2.4"
+  - "gcr.io/google_containers/etcd-amd64:2.2.1"
+  - "gcr.io/google_containers/kube2sky:1.14"
+  - "gcr.io/google_containers/skydns:2015-10-13-8c72f8c"
+  - "gcr.io/google_containers/exechealthz:1.0"
+  - "andyshinn/dnsmasq:2.72"
+  - "gcr.io/google_containers/flannel-server-helper:0.1"
+  - "quay.io/coreos/flannel:0.5.5"
+  - "nebirhos/stolon:master"

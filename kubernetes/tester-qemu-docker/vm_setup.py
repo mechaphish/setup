@@ -12,7 +12,7 @@ PIP_PKGS_TO_INSTALL = ['ipython', 'ipdb', 'dpkt', 'futures']
 # CGC PKGS TO INSTALL, these will be git cloned on DEPLOY_BRANCH and installed in VM.
 CGC_PKGS_TO_INSTALL = ['farnsworth', 'common-utils',  'vm-workers', 'compilerex', 'pov_fuzzing']
 CGC_DEPLOY_BRANCH = 'master'
-GIT_BASE_URL = 'git@git.seclab.cs.ucsb.edu:cgc/'
+GIT_BASE_URL = 'git@github.com:mechaphish/'
 
 # Files to Copy
 # src:dst

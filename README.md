@@ -91,4 +91,4 @@ sshp -f sshp/ips.txt uptime
 
 ## CGC cloud servers
 
-[Google Spreadsheet](https://docs.google.com/spreadsheets/d/1merG8nu291re7AyIhTZdZP4NNU7wPd4RcnNRLsHsSwI/edit#gid=0)
+[Google Spreadsheet](https://docs.google.com/spreadsheets/d/1merG8nu291re7AyIhTZdZP4NNU7wPd4RcnNRLsHsSwI/edit?usp=sharing)

@@ -12,7 +12,7 @@ RUN echo "angr ALL=NOPASSWD: ALL" > /etc/sudoers.d/angr
 USER angr
 
 # first clone, then install (for quicker builds from cache)
-ARG EXTRA_REPOS="identifier fidget angrop driller fuzzer tracer compilerex povsim rex farnsworth patcherex colorguard common-utils network_poll_creator patch_performance worker meister ambassador scriba"
+ARG EXTRA_REPOS="fidget angrop driller fuzzer tracer compilerex povsim rex farnsworth patcherex colorguard common-utils network_poll_creator patch_performance worker meister ambassador scriba"
 RUN ~/angr-dev/setup.sh -C $EXTRA_REPOS
 RUN ~/angr-dev/setup.sh -v -w -e angr peewee $EXTRA_REPOS && rm -rf wheels
 RUN ~/angr-dev/setup.sh -v -w -p angr-pypy peewee $EXTRA_REPOS && rm -rf wheels

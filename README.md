@@ -10,7 +10,7 @@ the CGC cloud servers.
 
 2. Clone this repository and VPN access keys (ask @Yan).
 
-3. Build or download the VM image in `roles/crs/vm/files/cgc-vm.qcow2`
+3. Build or download the VM image in `roles/crs/vm/files/cgc-vm.qcow2` (see [tester-qemu-docker](kubernetes/tester-qemu-docker/)).
 
 4. Run `ansible-playbook`
 

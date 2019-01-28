@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y sudo sshfs bsdutils python3-dev \
                             libpq-dev pkg-config zlib1g-dev libtool libtool-bin wget automake autoconf coreutils bison libacl1-dev \
                             qemu-user qemu-kvm socat \
                             postgresql-client nasm binutils-multiarch llvm clang \
-                            libpq-dev parallel && \
+                            libpq-dev parallel libgraphviz-dev && \
     echo "angr ALL=NOPASSWD: ALL" > /etc/sudoers.d/angr
 
 USER angr

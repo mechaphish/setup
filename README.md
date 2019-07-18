@@ -1,5 +1,7 @@
 # CGC cloud setup
 
+**ATTENTION: THIS REPOSITORY IS HERE FOR HISTORICAL PURPOSES ONLY. THE MECHANICAL PHISH WAS AN AWESOME PIECE OF SOFTWARE, DEPLOYED DURING THE CGC AND OTHER COOL COMPETITIONS, BUT IT HAS NOT BEEN MAINTAINED SINCE 2016, AND HAS BITROTTED AND BEEN OBSOLETED BY OTHER INTERNAL AND PUBLIC PROTOTYPES. PLEASE DO NOT CONTACT ANYONE, ANYWHERE, ABOUT ANYTHING RELATED TO THIS REPOSITORY.**
+
 This repository contains scripts and data used in managing the configuration of
 the CGC cloud servers.
 
@@ -8,7 +10,7 @@ the CGC cloud servers.
 1. Get [Ansible](http://www.ansibleworks.com/)
    (`pip install -r requirements.txt`)
 
-2. Clone this repository and VPN access keys (ask @Yan).
+2. Clone this repository.
 
 3. Build or download the VM image in `roles/crs/vm/files/cgc-vm.qcow2` (see [tester-qemu-docker](kubernetes/tester-qemu-docker/)).
 
